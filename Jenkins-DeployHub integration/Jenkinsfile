@@ -1,0 +1,191 @@
+!#Groovy
+// loading deployhub library
+@Library('deployhub') _
+// global variables
+def dh = new deployhub();
+def dhUrl = ""; // add the Deployhub URL here
+// application name required to create application version and deploy application version
+def applicationName = "";
+// reference to current application. will be set in create application version stage
+def applicationId = ""; // this variable will be used later to identify the application
+// reference to current component. will be set in create component version stage
+def componentId = ""; //this variable will be used later to identify the component.
+		stage('Build')
+		{
+              //  add the maven or gradle build stage here
+		}
+		stage('NexusUpload')
+		{
+			  // add the nexus upload stage (if any)
+		}
+		stage('DeployHub - Component creation') {
+			// username and password to be used to connect to deployhub project
+			// this username will be created by Singularity team and will already be present for you to use
+			def user = ""; // add deployhub login username
+			def pwd = ""; // add deployhub login password
+
+			// this the complete component name of the component
+			// if the component is in a sub-domain give the name as
+			// <project_domain_name>.<sub_domain>.<component_name>
+			def componentName = "";  // add the component name here
+			// This is the new component version that will be created
+			// If the component base version doesn't exists, that will also be created
+			def componentVersion = ""; // add the component version here
+			// Defining URI and pattern here which will be passed to componentItems
+			def uri_param = "" // add the uri_param name here
+			def pattern = ".zip"
+			echo uri_param
+			echo pattern
+			// parameters used in this to create component item(s)
+			// 1. name: meta name, is only used to represent component item
+			// 2. targetdir: directory to place the file on the VM, can be left as ""
+			//               if you already have base directory defined for the component.
+			//               DeployHub follows relative directory structure. You'll give base
+			//               dirctory on endpoint as well as component. It will look like
+			//               <endpoint_dir>/<component_base_dir>/<target_dir>
+			// 3. repo: This the repo name that you have to create beforehand in DeployHub
+			// 4. uri: This is also relative to the path you have given during repository creation.
+			//         You have to give the path after the path that is there in the repository object
+			//         e.g <repository_uri>/<this_uri> . Remove the leading and trailing forward slashes ('/') from this uri
+			//         This can also be left as '' , if the file as at the root of repository_uri
+			// 5. pattern: This is the filename using which the file is present in the repository
+			// Note: you can have as many component items that is required
+			def componentItems = [
+				[
+					name: 'Item 1', targetdir: "", repo: 'Nexus Repository', uri: uri_param, pattern: pattern
+				]
+			];
+
+			// create component version
+			// parameters used
+			// dhUrl: url for the deployhub API
+			// user: username
+			// pwd: password
+			// componentName: component name
+			// component Variant: not required, give as ""
+			// componentVersion: component version to create
+			// component type: "file"
+			// componentItems: list of component items to add to this component version
+			componentId = dh.newComponentVersion(dhUrl, user, pwd, componentName, "", componentVersion, "file", componentItems);
+			echo "Component Creation Done " + componentId.toString();
+
+			// component attributes
+			// These are used to set attributes
+			// DeployHub built-in attributes such as
+			// buildnumber - build job number for Jenkins
+			// buildjob - build job name for Jenkins
+			// ComponentType - name of the component type
+			// ChangeRequestDS - name of the Change Request Datasource
+			// Category - name of the components category, e.g Genral, Deploy
+			// AlwaysDeploy - Y/N
+			// DeploySequentially - Y/N
+			// BaseDirectory - base directory for the component
+			// PreAction - name of the pre-action
+			// PostAction - name of the post-action
+			// Summary - component summary
+			def componentAttrs = [
+				"buildnumber": "${BUILD_NUMBER}",
+				"ComponentType": "", // add the component types
+				"Category": "General",
+				"BaseDirectory": "",
+				"PostAction": "",  // add if there is any post deployment action
+				"Summary": ""
+				//// IMPORTANT NOTE ////
+				// You can also have user defined attributes which will be available as environment variables in linux, windows, etc.
+				// below are examples, change and add as required
+				//"config_path": "/etc/app/config",
+				//"deploy_path": "/opt/app/"
+			];
+
+			// Set/Update component attributes
+			data = dh.updateComponentAttrs(dhUrl, user, pwd, componentName, "", componentVersion , componentAttrs);
+			echo "Component Attributes Update Done " + data.toString();
+
+			// Methods are avaialble to update application, environment and endpoint attributes also
+			// User defined Attributes will be passed as environment variables in linux, windows, etc.
+			// These are optional
+
+			/**
+			* Update the environment attrs
+			* @param url Text the url to the DeployHub server
+			* @param userid Text the DeployHub userid.
+			* @param pw Text the DeployHub password
+			* @param envname Text the name of the environment
+			* @param Attrs Map the key values pairs of attrs
+			* @return Array with first element being the return code, second msg
+			**/
+			// data = dh.updateEnvironmentAttrs(dhUrl, user, pwd, environmentName, environmentAttrs)
+			// echo "Env Attr Update Done " + data.toString();
+
+			/**
+			* Update the endpoint attrs
+			* @param url Text the url to the DeployHub server
+			* @param userid Text the DeployHub userid.
+			* @param pw Text the DeployHub password
+			* @param endpointname Text the name of the endpoint
+			* @param Attrs Map the key values pairs of attrs
+			* @return Array with first element being the return code, second msg
+			**/
+			// data = dh.updateEndpointAttrs(dhUrl, user, pwd, endpointName, endpointAttrs)
+			// echo "Endpoint Attr Update Done " + data.toString();
+
+			//// IMPORTANT NOTE ////
+			// Override order for attributes is as follows:
+			// Environment (lowest)
+			// Application
+			// Endpoint
+			// Component (highest)
+			// For example, attribute 'foo' at the component level will override 'foo' defined at the environment level.
+		}
+		stage('DeployHub - Application Creation') {
+
+			// username and password to be used to connect to deployhub project
+			// this username will be created by Singularity team and will already be present for you to use
+			def user = "";
+			def pwd = ""; // This needs to empty
+
+			// Environments in which application can deploy. Environments should be created beforehand in deployhub. Atleast one is required
+			def String[] applicationEnvs = [
+				
+				//"GLOBAL.<project_domain_name>.<environment_2_name>"
+			]
+			// check if application exists
+			def applicationVersion = "";
+			data = dh.getApplication(dhUrl, user, pwd, applicationName, applicationVersion);
+			applicationId = data[0];
+			if(applicationId < 0) {
+				// application not found creating now
+				//echo "App not found " + appid.toString();
+				data = dh.newApplication(dhUrl, user, pwd, applicationName, applicationVersion, applicationEnvs);
+				echo "Created New Application " + data.toString();
+				// store the application id
+				applicationId = data[0];
+			}
+			else {
+				echo "App Found " + applicationId.toString();
+			}
+
+			// add/replace component(s) into application version
+			data = dh.addCompVer2AppVer(dhUrl, user, pwd, applicationId, componentId);
+			echo "data from addCompVer2AppVer Found " + data.toString();
+			applicationId = applicationId.toString()
+			def moveTask = "MoveAppToAzure";
+			def fromDomain = "";
+			dh.moveApplication(dhUrl, user, pwd, applicationId, fromDomain, moveTask);
+			//echo moveData;
+			//data = dh.getApplication(dhurl, user, pwd, applicationName, applicationVersion);
+			//applicationId = data[0]; 
+			// Optional
+			/**
+			* Update the application attrs
+			* @param url Text the url to the DeployHub server
+			* @param userid Text the DeployHub userid.
+			* @param pw Text the DeployHub password
+			* @param appname Text the name of the application
+			* @param appversion Text the version of the application
+			* @param Attrs Map the key values pairs of attrs
+			* @return Array with first element being the return code, second msg
+			**/
+			// data = dh.updateApplicationAttrs(dhUrl, user, pwd, applicationName, applicationVersion, applicationAttrs)
+			// echo "App Attr Update Done " + data.toString();
+		}
