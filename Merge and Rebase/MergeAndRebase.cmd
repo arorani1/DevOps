@@ -1,0 +1,1 @@
+@powershell -File "%~dp0MergeAndRebase.ps1" -triggeredBranch "%1" -gitFolder "%1"
