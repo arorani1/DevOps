@@ -1,3 +1,3 @@
 Open Command Promt in Administrator mode.
-Run 
+Run
   call "E:\\MergeAndRebase\\MergeAndRebase.cmd" <Triggered_Branch> <Path_of_Git_folder>
